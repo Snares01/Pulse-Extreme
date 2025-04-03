@@ -1,0 +1,105 @@
+/*
+Palette
+Main background: #272429
+Main foreground: #000
+Accent: #gray
+*/
+
+#MainWindow {
+    background-color: #272429;
+}
+
+QLabel {
+    color: #7c7c7c;
+    font-family: Helvetica, sans-serif;
+}
+QPushButton {
+    font-family: 'Roboto Medium', Helvetica, sans-serif;
+}
+
+
+/* Sidebar */
+#sidebar {
+    background-color: #000;
+}
+
+#sidebar QPushButton {
+    border: none;
+    text-align: left;
+    color: #eee;
+    padding: 8px 0 8px 15px;
+    font-size: 13px;
+}
+
+#sidebar QPushButton:hover {
+    background-color: #1e1b20;
+}
+
+#sidebar QPushButton:checked {
+    background-color: #272429;
+    font-weight: bold;
+}
+#titleLabel {
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+    font-family: 'Roboto Medium', sans-serif;
+}
+
+
+/* Content Area */
+QCheckBox {
+    background-color: #000;
+    color: #eee;
+    border-radius: 8px;
+    padding: 20px 20px 20px 20px;
+    font-weight: bold;
+    font-family: Arial, Helvetica, sans-serif;
+}
+QCheckBox::indicator {
+    width: 40px;
+    height: 19px;
+}
+
+#content QPushButton {
+    color: #dc6acf;
+    font-weight: bold;
+    padding: 6px 9px 6px 9px;
+    font-family: 'Roboto Light', Helvetica, sans-serif
+}
+#content QPushButton:hover {
+    color: #c25db6;
+}
+
+/* topbar */
+#topbar {
+    background-color: #000;
+    border-left: 1px solid #272429;
+    
+}
+#topbar QPushButton {
+    border: 1px solid #dc6acf;
+}
+#topbar QPushButton:hover {
+    border: 1px solid #c25db6;
+}
+
+/* footer */
+#footer {
+    background-color: #000;
+    border-left: 1px solid #272429;
+}
+#footer QPushButton {
+    font-size: 15px;
+    color: #000000;
+    background-color: #dc6acf;
+    padding: 12px 24px 12px 24px;
+    margin-right: 20px;
+}
+#footer QPushButton:hover {
+    color: #000;
+    background-color: #c25db6;
+}
+#checkoutWidget {
+    background-color: #eeeeee;
+}

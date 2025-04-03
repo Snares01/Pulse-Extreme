@@ -1,3 +1,13 @@
+# Batch files
+batch/
+
+# Build
+build/
+dist/
+
+# VM Testing
+testing/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

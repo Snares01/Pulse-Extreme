@@ -1,0 +1,16 @@
+<RCC>
+  <qresource prefix="icons">
+    <file>icons/cpu.png</file>
+    <file>icons/debloat.png</file>
+    <file>icons/general.png</file>
+    <file>icons/gpu.png</file>
+    <file>icons/input.png</file>
+    <file>icons/latency.png</file>
+    <file>icons/memory.png</file>
+    <file>icons/network.png</file>
+    <file>icons/power.png</file>
+    <file>icons/pulse_white_logo.png</file>
+    <file>icons/search.png</file>
+    <file>icons/services.png</file>
+  </qresource>
+</RCC>

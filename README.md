@@ -7,6 +7,6 @@ The batch files used by the program are not included in this repo.
 
 ### Screenshots
 
-![Screenshot showing basic use](screenshot_1.png)
+![Screenshot showing basic use](github/screenshot_1.png)
 
-![Screenshot showing tweaks being applied](screenshot_2.png)
+![Screenshot showing tweaks being applied](github/screenshot_2.png)

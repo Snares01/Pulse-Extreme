@@ -1,12 +1,12 @@
 from PySide6.QtCore import (QCoreApplication, QDate, QDateTime, QLocale,
     QMetaObject, QObject, QPoint, QRect,
-    QSize, QTime, QUrl, Qt, Signal, QThread)
+    QSize, QTime, QUrl, Qt, Signal, QThread, QTimer)
 from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QFont, QFontDatabase, QGradient, QIcon,
-    QImage, QKeySequence, QLinearGradient, QPainter,
+    QImage, QKeySequence, QLinearGradient, QPainter, 
     QPalette, QPixmap, QRadialGradient, QTransform, QCloseEvent)
 from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QLineEdit,
-    QMainWindow, QPushButton, QScrollArea, QSizePolicy, QProgressBar,
+    QMainWindow, QPushButton, QScrollArea, QSizePolicy, QProgressBar, QMessageBox,
     QSpacerItem, QStackedWidget, QVBoxLayout, QWidget, QLayout, QGridLayout, QCheckBox, QDialog, QDialogButtonBox)
 from threading import Timer
 from asset_finder import get_path, get_batch_path
@@ -282,7 +282,6 @@ class Ui_MainWindow(object):
                 item.set_applied()
                 # Remove from checkout & unselect
                 self._delete_checkout_item(item.text())
-
             
     # Gets all OptionToggles with matching names (or all OptionToggles if no names are given)
     def _get_option_toggles(self, current_page = True, names = []) -> list[QCheckBox]:
@@ -354,7 +353,7 @@ class Ui_MainWindow(object):
             # Dialog over
             self._load_tweaks()
         
-
+# Popup that opens when applying tweaks
 class ApplyDialog(QDialog):
     reportStart = Signal()
     
@@ -370,8 +369,7 @@ class ApplyDialog(QDialog):
             }
             QDialog {
                 background-color: #222;
-                border: 2px solid gray;
-                border-radius: 10px;       
+                border: 2px solid gray;  
             }
         """)
 
@@ -560,6 +558,71 @@ class ApplyWorker(QObject):
                 self.tweakDone.emit(False, name)
 
         self.finished.emit()
+
+# Popup that opens on startup
+class StartupLicenseDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("LicenseWindow")
+        
+        
+        # Create layout & widgets
+        self.mainLayout = QVBoxLayout()
+        self.mainLayout.setContentsMargins(10, 10, 10, 10)
+
+        self.topMessage = QLabel("Enter license key")
+        self.topMessage.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        topMessageFont = QFont("Roboto-Medium", 12)
+        topMessageFont.setBold(True)
+        self.topMessage.setFont(topMessageFont)
+        
+        self.topLink = QLabel("Link to purchase")
+        self.topLink.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        linkMessageFont = QFont("Roboto-Light", 10)
+        self.topLink.setFont(linkMessageFont)
+
+        self.licenseBox = QLineEdit()
+        self.licenseBox.setPlaceholderText("XXXX-XXXX-XXXX")
+
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Apply)
+        QTimer.singleShot(0, self._set_default_btn)
+        self.buttonBox.setCenterButtons(True)
+        
+        # Add widgets to layout
+        self.mainLayout.addWidget(self.topMessage)
+        self.mainLayout.addWidget(self.topLink)
+        self.mainLayout.addWidget(self.licenseBox)
+        self.mainLayout.addWidget(self.buttonBox)
+        self.setLayout(self.mainLayout)
+        
+        # Connect signals
+        self.buttonBox.clicked.connect(self._on_button_pressed)
+
+        # Set window size
+        self.adjustSize()
+        size_hint = self.sizeHint()
+        self.setFixedSize(300, size_hint.height())
+    
+    # Must be done after dialog / layout is shown
+    def _set_default_btn(self):
+        applyBtn = self.buttonBox.button(QDialogButtonBox.Apply)
+        applyBtn.setDefault(True)
+        applyBtn.setAutoDefault(True)
+        applyBtn.setFocus()
+    
+
+    def _on_button_pressed(self, button) -> None:
+        role = self.buttonBox.buttonRole(button)
+        if role == QDialogButtonBox.ApplyRole:
+            print("apply")
+            if self.verify_license():
+                self.accept()
+            else:
+                QMessageBox.warning(self, "License Verification Failed", "A valid license key must be entered to continue.")
+    
+    # TODO: Replace with code that checks license status online
+    def verify_license(self) -> bool:
+        return True
 
 
 class OptionToggle(QCheckBox):

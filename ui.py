@@ -10,8 +10,17 @@ from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QLineEdit,
     QSpacerItem, QStackedWidget, QVBoxLayout, QWidget, QLayout, QGridLayout, QCheckBox, QDialog, QDialogButtonBox)
 from threading import Timer
 from asset_finder import get_path, get_batch_path
+import http.client
 import subprocess, json, os
 import constants
+
+REQ_NAME = "Pulse%20Extreme"
+REQ_VER = "1.0"
+REQ_OWNER_ID = "5yiNVzEtid"
+
+file_dir = os.path.expandvars(r'%LOCALAPPDATA%\PulseExtreme')
+file_name = r'\save_state.json'
+
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow) -> None:
@@ -68,6 +77,7 @@ class Ui_MainWindow(object):
         self.sidebarLayout.addItem(self.verticalSpacer)
 
         self.LicenseBtn = QPushButton(self.sidebar)
+        self.LicenseBtn.clicked.connect(self._on_license_clicked)
         self.LicenseBtn.setObjectName(u"LicenseBtn")
 
         self.sidebarLayout.addWidget(self.LicenseBtn)
@@ -352,6 +362,11 @@ class Ui_MainWindow(object):
             dialog.exec()
             # Dialog over
             self._load_tweaks()
+    
+    # Signal
+    def _on_license_clicked(self) -> None:
+        dialog = LicenseCheckDialog()
+        dialog.exec()
         
 # Popup that opens when applying tweaks
 class ApplyDialog(QDialog):
@@ -509,25 +524,29 @@ class ApplyDialog(QDialog):
             self.work_thread.wait()
             self.thread_working = False
         # Create directory
-        file_dir = os.path.expandvars(r'%LOCALAPPDATA%\PulseExtreme')
         if not os.path.exists(file_dir):
             os.makedirs(file_dir)
         # Create save data
         save_data = {"applied": self.applied_tweaks}
         # Get existing data (if it exists)
         try:
-            with open(file_dir + r'\save_state.json', "r") as f:
+            with open(file_dir + file_name, "r") as f:
                 old_data = json.load(f)
                 if ("applied" in old_data) and (isinstance(old_data["applied"], list)) and (len(old_data["applied"]) > 0):
+                    print("saving applied tweaks")
+                    print(old_data)
+                    print(save_data)
                     for tweak_name in old_data["applied"]:
                         if tweak_name not in save_data["applied"]:
                             save_data["applied"].append(tweak_name)
+                if "license" in old_data:
+                    save_data["license"] = old_data["license"]
         except: # We don't care about the type of exception, just save anyway. there's probably a better way to do this ¯\_(ツ)_/¯
             print("Couldn't retrieve existing data")
         # Save to file
         with open(file_dir + r'\save_state.json', "w") as f:
             json.dump(save_data, f)
-
+        print(save_data)
         self.saved = True
         self.close()
 
@@ -561,10 +580,11 @@ class ApplyWorker(QObject):
 
 # Popup that opens on startup
 class StartupLicenseDialog(QDialog):
+    sessionid = "" # KeyAuth session
+
     def __init__(self):
         super().__init__()
         self.setObjectName("LicenseWindow")
-        
         
         # Create layout & widgets
         self.mainLayout = QVBoxLayout()
@@ -582,7 +602,7 @@ class StartupLicenseDialog(QDialog):
         self.topLink.setFont(linkMessageFont)
 
         self.licenseBox = QLineEdit()
-        self.licenseBox.setPlaceholderText("XXXX-XXXX-XXXX")
+        self.licenseBox.setPlaceholderText("XXXXX-XXXXX-XXXXX")
 
         self.buttonBox = QDialogButtonBox(QDialogButtonBox.Apply)
         QTimer.singleShot(0, self._set_default_btn)
@@ -602,7 +622,7 @@ class StartupLicenseDialog(QDialog):
         self.adjustSize()
         size_hint = self.sizeHint()
         self.setFixedSize(300, size_hint.height())
-    
+
     # Must be done after dialog / layout is shown
     def _set_default_btn(self):
         applyBtn = self.buttonBox.button(QDialogButtonBox.Apply)
@@ -614,15 +634,101 @@ class StartupLicenseDialog(QDialog):
     def _on_button_pressed(self, button) -> None:
         role = self.buttonBox.buttonRole(button)
         if role == QDialogButtonBox.ApplyRole:
-            print("apply")
-            if self.verify_license():
+            if self.verify_license(self.licenseBox.text()):
+                # License accepted; save to file
+                if not os.path.exists(file_dir):
+                    os.makedirs(file_dir)
+                data = {"license": self.licenseBox.text()}
+                # Add license to existing data (if there's a file already)
+                try:
+                    with open(file_dir + file_name, "r") as f:
+                        old_data = json.load(f)
+                        if isinstance(old_data, dict):
+                            data = old_data
+                            data["license"] = self.licenseBox.text()
+                except:
+                    print("Couldn't retrieve existing data")
+                # Save to file
+                with open(file_dir + file_name, "w") as f:
+                    json.dump(data, f)
+                # Continue to main program
                 self.accept()
             else:
                 QMessageBox.warning(self, "License Verification Failed", "A valid license key must be entered to continue.")
     
-    # TODO: Replace with code that checks license status online
-    def verify_license(self) -> bool:
-        return True
+    # Used in main.py to skip this dialog on init
+    def verify_saved_license(self) -> bool:
+        if os.path.exists(file_dir + file_name):
+            with open(file_dir + file_name, "r") as f:
+                if f.read(): # File not empty
+                    data = json.load(f)
+                    if isinstance(data, dict) and "license" in data and self.verify_license(data["license"]):
+                        return True
+        return False
+
+    # Check license with KeyAuth
+    def verify_license(self, license) -> bool:
+        # Initialize with GET request
+        conn = http.client.HTTPSConnection("keyauth.win")
+        conn.request("GET", f'/api/1.3/?type=init&ver={REQ_VER}&name={REQ_NAME}&ownerid={REQ_OWNER_ID}', '', {})
+        res = conn.getresponse()
+        data = res.read()
+        init_res = json.loads(data.decode())
+        print(init_res)
+        if 'success' in init_res and init_res["success"] == True:
+            # Login with key
+            print(f'Attempting to login (key: {license})')
+            self.sessionid = init_res['sessionid']
+            conn.request("GET", f'/api/1.3/?type=license&key=KEYAUTH-{license}&sessionid={self.sessionid}&name={REQ_NAME}&ownerid={REQ_OWNER_ID}', '', {})
+            res = conn.getresponse()
+            data = res.read()
+            login_res = json.loads(data.decode())
+            print(login_res)
+            if 'success' in login_res and login_res["success"] == True:
+                conn.close()
+                return True
+            else:
+                if 'message' in login_res:
+                    # TODO: Use message in error popup
+                    print(login_res['message'])
+                print("Failed to login")
+        else:
+            # Initialization failed
+            print("failed to initialize")
+        conn.close()
+        return False
+
+# Popup that opens from "License" button in main program
+class LicenseCheckDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("LicenseCheckWindow")
+        
+        # Create layout & widgets
+        self.mainLayout = QVBoxLayout()
+        self.mainLayout.setContentsMargins(10, 10, 10, 10)
+
+        self.licenseLabel = QLabel("Current license:\n3DKIa-Ql95h-yyMl3") # TODO: insert license here
+        
+        self.expireLabel = QLabel("Expires in 4 days")
+
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttonBox.setCenterButtons(True)
+
+        logOutButton = self.buttonBox.button(QDialogButtonBox.Ok)
+        logOutButton.setText("Logout")
+
+        # Add widgets to layout
+        self.mainLayout.addWidget(self.licenseLabel)
+        self.mainLayout.addWidget(self.expireLabel)
+        self.mainLayout.addWidget(self.buttonBox)
+        self.setLayout(self.mainLayout)
+
+        # Set window size
+        self.adjustSize()
+        size_hint = self.sizeHint()
+        self.setFixedSize(300, size_hint.height())
+
 
 
 class OptionToggle(QCheckBox):
@@ -685,7 +791,7 @@ class CheckoutLabel(QLabel):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setWordWrap(True)
 
-
+# Sidebar button
 class CategoryButton(QPushButton):
     categoryChosen = Signal(str)
 

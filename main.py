@@ -47,6 +47,7 @@ if __name__ == '__main__':
             conn = http.client.HTTPSConnection("keyauth.win")
 
             conn.request("GET", f'/api/1.3/?type=logout&sessionid={sessionid}&name={REQ_NAME}&ownerid={REQ_OWNER_ID}')
+            conn.close()
             # Testing
             #res = conn.getresponse()
             #data = res.read()

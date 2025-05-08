@@ -10,8 +10,8 @@ from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QLineEdit,
     QSpacerItem, QStackedWidget, QVBoxLayout, QWidget, QLayout, QGridLayout, QCheckBox, QDialog, QDialogButtonBox)
 from threading import Timer
 from asset_finder import get_path, get_batch_path
-import http.client
-import subprocess, json, os
+import subprocess, json, os, sys, pyperclip, http.client
+import datetime, humanize
 import constants
 
 REQ_NAME = "Pulse%20Extreme"
@@ -533,9 +533,7 @@ class ApplyDialog(QDialog):
             with open(file_dir + file_name, "r") as f:
                 old_data = json.load(f)
                 if ("applied" in old_data) and (isinstance(old_data["applied"], list)) and (len(old_data["applied"]) > 0):
-                    print("saving applied tweaks")
-                    print(old_data)
-                    print(save_data)
+                    print("saving applied tweaks...")
                     for tweak_name in old_data["applied"]:
                         if tweak_name not in save_data["applied"]:
                             save_data["applied"].append(tweak_name)
@@ -581,10 +579,13 @@ class ApplyWorker(QObject):
 # Popup that opens on startup
 class StartupLicenseDialog(QDialog):
     sessionid = "" # KeyAuth session
+    license = ""
+    expiry = ""
 
     def __init__(self):
         super().__init__()
         self.setObjectName("LicenseWindow")
+        self.setWindowTitle("License")
         
         # Create layout & widgets
         self.mainLayout = QVBoxLayout()
@@ -623,6 +624,17 @@ class StartupLicenseDialog(QDialog):
         size_hint = self.sizeHint()
         self.setFixedSize(300, size_hint.height())
 
+    @staticmethod
+    def get_saved_license() -> str:
+        if os.path.exists(file_dir + file_name):
+            with open(file_dir + file_name, "r") as f:
+                content = f.read()
+                if content: # File not empty
+                    data = json.loads(content)
+                    if isinstance(data, dict) and "license" in data:
+                        return data["license"]
+        return ""
+
     # Must be done after dialog / layout is shown
     def _set_default_btn(self):
         applyBtn = self.buttonBox.button(QDialogButtonBox.Apply)
@@ -658,15 +670,13 @@ class StartupLicenseDialog(QDialog):
     
     # Used in main.py to skip this dialog on init
     def verify_saved_license(self) -> bool:
-        if os.path.exists(file_dir + file_name):
-            with open(file_dir + file_name, "r") as f:
-                if f.read(): # File not empty
-                    data = json.load(f)
-                    if isinstance(data, dict) and "license" in data and self.verify_license(data["license"]):
-                        return True
+        saved_license = StartupLicenseDialog.get_saved_license()
+        if saved_license and self.verify_license(saved_license):
+            return True
         return False
 
     # Check license with KeyAuth
+    # Sets static variables
     def verify_license(self, license) -> bool:
         # Initialize with GET request
         conn = http.client.HTTPSConnection("keyauth.win")
@@ -674,7 +684,6 @@ class StartupLicenseDialog(QDialog):
         res = conn.getresponse()
         data = res.read()
         init_res = json.loads(data.decode())
-        print(init_res)
         if 'success' in init_res and init_res["success"] == True:
             # Login with key
             print(f'Attempting to login (key: {license})')
@@ -685,6 +694,13 @@ class StartupLicenseDialog(QDialog):
             login_res = json.loads(data.decode())
             print(login_res)
             if 'success' in login_res and login_res["success"] == True:
+                # Set static variables
+                StartupLicenseDialog.license = license
+                if "subscriptions" in login_res["info"] and len(login_res["info"]["subscriptions"]) > 0:
+                    expiry = login_res["info"]["subscriptions"][0]["expiry"]
+                    if int(expiry) < 100_000_000: # Account for lifetime licenses
+                        StartupLicenseDialog.expiry = expiry
+                # Return
                 conn.close()
                 return True
             else:
@@ -703,20 +719,34 @@ class LicenseCheckDialog(QDialog):
     def __init__(self):
         super().__init__()
         self.setObjectName("LicenseCheckWindow")
+        self.setWindowTitle("License")
         
         # Create layout & widgets
         self.mainLayout = QVBoxLayout()
         self.mainLayout.setContentsMargins(10, 10, 10, 10)
 
-        self.licenseLabel = QLabel("Current license:\n3DKIa-Ql95h-yyMl3") # TODO: insert license here
+        self.licenseLabel = QLabel() 
+        self.licenseLabel.setText("Current license:\n" + StartupLicenseDialog.license)
+        self.licenseLabel.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         
-        self.expireLabel = QLabel("Expires in 4 days")
+        self.expireLabel = QLabel()
+        self.expireLabel.setText(self.format_expiry_time())
+        self.expireLabel.setAlignment(Qt.AlignmentFlag.AlignHCenter)
 
-        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Open | QDialogButtonBox.Cancel)
         self.buttonBox.setCenterButtons(True)
 
         logOutButton = self.buttonBox.button(QDialogButtonBox.Ok)
-        logOutButton.setText("Logout")
+        logOutButton.setText("Sign out")
+        logOutButton.clicked.connect(self._on_logout_pressed)
+
+        copyButton = self.buttonBox.button(QDialogButtonBox.Open)
+        copyButton.setText("Copy To Clipboard")
+        copyButton.clicked.connect(self._on_copy_pressed)
+
+        continueButton = self.buttonBox.button(QDialogButtonBox.Cancel)
+        continueButton.setText("Continue")
+        continueButton.clicked.connect(self._on_continue_pressed)
 
         # Add widgets to layout
         self.mainLayout.addWidget(self.licenseLabel)
@@ -727,7 +757,44 @@ class LicenseCheckDialog(QDialog):
         # Set window size
         self.adjustSize()
         size_hint = self.sizeHint()
-        self.setFixedSize(300, size_hint.height())
+        self.setFixedSize(400, size_hint.height())
+
+ 
+    def _on_logout_pressed(self) -> None:
+        # Remove saved license
+        if os.path.exists(file_dir + file_name):
+            with open(file_dir + file_name, "r") as f:
+                content = f.read()
+                if content: # File not empty
+                    data = json.loads(content)
+                    if isinstance(data, dict) and "license" in data:
+                        # Remove license, write new data to file
+                        del data["license"]
+                        with open(file_dir + r'\save_state.json', "w") as f:
+                            json.dump(data, f)
+                        # Reset program
+                        os.execl(sys.executable, f'"{sys.executable}"', *sys.argv)
+        self.accept()
+    
+
+    def _on_copy_pressed(self) -> None:
+        pyperclip.copy(StartupLicenseDialog.license)
+
+
+    def _on_continue_pressed(self) -> None:
+        self.accept()
+
+
+    def format_expiry_time(self) -> str:
+        if StartupLicenseDialog.expiry:
+            # Temporary license
+            expiry = datetime.datetime.fromtimestamp(int(StartupLicenseDialog.expiry))
+            now = datetime.datetime.now()
+            relative_time = humanize.naturaltime(now - expiry)
+            date = expiry.strftime(r"%Y/%m/%d")
+            return f'Expires {relative_time} ({date})'
+        else:
+            return "(Lifetime)"
 
 
 

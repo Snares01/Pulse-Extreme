@@ -10,9 +10,10 @@ ASSETS = {
     "toggle_off_disabled": ["assets", "toggle_off_disabled.png"],
     "toggle_on": ["assets", "toggle_on.png"],
     "toggle_on_disabled": ["assets", "toggle_on_disabled.png"],
-    # logo
+    # logo / window icons
     "corner_logo": ["assets", "pulse_corner_logo.png"],
     "icon_logo": ["assets", "pulse_icon_logo.png"],
+    "license_key": ["assets", "license_key.png"],
     # icons (keys correspond to titles in constants.py)
     "CPU": ["assets", "icons", "cpu.png"],
     "Memory": ["assets", "icons", "memory.png"],

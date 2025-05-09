@@ -7,7 +7,7 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QPalette, QPixmap, QRadialGradient, QTransform, QCloseEvent)
 from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QLineEdit,
     QMainWindow, QPushButton, QScrollArea, QSizePolicy, QProgressBar, QMessageBox,
-    QSpacerItem, QStackedWidget, QVBoxLayout, QWidget, QLayout, QGridLayout, QCheckBox, QDialog, QDialogButtonBox)
+    QSpacerItem, QStackedWidget, QVBoxLayout, QWidget, QLayout, QGridLayout, QCheckBox, QDialog, QDialogButtonBox, QFrame)
 from threading import Timer
 from asset_finder import get_path, get_batch_path
 import subprocess, json, os, sys, pyperclip, http.client
@@ -586,43 +586,65 @@ class StartupLicenseDialog(QDialog):
         super().__init__()
         self.setObjectName("LicenseWindow")
         self.setWindowTitle("License")
+        self.setWindowIcon(QIcon(get_path("license_key")))
         
         # Create layout & widgets
         self.mainLayout = QVBoxLayout()
         self.mainLayout.setContentsMargins(10, 10, 10, 10)
 
-        self.topMessage = QLabel("Enter license key")
-        self.topMessage.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        topMessageFont = QFont("Roboto-Medium", 12)
-        topMessageFont.setBold(True)
+        self.topMessage = QLabel("Enter your license key to continue. A license key can be purchased at (link)")
+        self.topMessage.setWordWrap(True)
+        #self.topMessage.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        topMessageFont = QFont("Roboto-Light", 10)
         self.topMessage.setFont(topMessageFont)
+
+        self.topSpacer = QSpacerItem(20, 25, QSizePolicy.Minimum, QSizePolicy.Minimum)
+
+        self.licenseLabel = QLabel("License Key:")
+        self.licenseLabel.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        licenseLabelFont = QFont("Roboto-Medium", 12)
+        licenseLabelFont.setBold(True)
+        self.licenseLabel.setFont(licenseLabelFont)
         
-        self.topLink = QLabel("Link to purchase")
-        self.topLink.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        linkMessageFont = QFont("Roboto-Light", 10)
-        self.topLink.setFont(linkMessageFont)
-
         self.licenseBox = QLineEdit()
+        self.licenseBox.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.licenseBox.setMaximumWidth(250)
         self.licenseBox.setPlaceholderText("XXXXX-XXXXX-XXXXX")
+        licenseBoxLayout = QHBoxLayout() # Layout for centering licenseBox
+        licenseBoxLayout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        licenseBoxLayout.addWidget(self.licenseBox)
 
-        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Apply)
-        QTimer.singleShot(0, self._set_default_btn)
-        self.buttonBox.setCenterButtons(True)
+        self.bottomSpacer = QSpacerItem(20, 35, QSizePolicy.Minimum, QSizePolicy.Minimum)
+
+        self.lineBreak = QFrame()
+        self.lineBreak.setFrameShape(QFrame.Shape.HLine)
+        self.lineBreak.setFrameShadow(QFrame.Shadow.Sunken)
+
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Apply)
+        #QTimer.singleShot(0, self._set_default_btn)
+        #self.buttonBox.setCenterButtons(True)
+
+        nextButton = self.buttonBox.button(QDialogButtonBox.Apply)
+        nextButton.clicked.connect(self._on_next_pressed)
+        nextButton.setText("Next")
+
+        cancelButton = self.buttonBox.button(QDialogButtonBox.Cancel)
+        cancelButton.clicked.connect(self._on_cancel_pressed)
         
         # Add widgets to layout
         self.mainLayout.addWidget(self.topMessage)
-        self.mainLayout.addWidget(self.topLink)
-        self.mainLayout.addWidget(self.licenseBox)
+        self.mainLayout.addItem(self.topSpacer)
+        self.mainLayout.addWidget(self.licenseLabel)
+        self.mainLayout.addLayout(licenseBoxLayout)
+        self.mainLayout.addItem(self.bottomSpacer)
+        self.mainLayout.addWidget(self.lineBreak)
         self.mainLayout.addWidget(self.buttonBox)
         self.setLayout(self.mainLayout)
-        
-        # Connect signals
-        self.buttonBox.clicked.connect(self._on_button_pressed)
 
         # Set window size
         self.adjustSize()
         size_hint = self.sizeHint()
-        self.setFixedSize(300, size_hint.height())
+        self.setFixedSize(350, size_hint.height())
 
     @staticmethod
     def get_saved_license() -> str:
@@ -643,30 +665,28 @@ class StartupLicenseDialog(QDialog):
         applyBtn.setFocus()
     
 
-    def _on_button_pressed(self, button) -> None:
-        role = self.buttonBox.buttonRole(button)
-        if role == QDialogButtonBox.ApplyRole:
-            if self.verify_license(self.licenseBox.text()):
-                # License accepted; save to file
-                if not os.path.exists(file_dir):
-                    os.makedirs(file_dir)
-                data = {"license": self.licenseBox.text()}
-                # Add license to existing data (if there's a file already)
-                try:
-                    with open(file_dir + file_name, "r") as f:
-                        old_data = json.load(f)
-                        if isinstance(old_data, dict):
-                            data = old_data
-                            data["license"] = self.licenseBox.text()
-                except:
-                    print("Couldn't retrieve existing data")
-                # Save to file
-                with open(file_dir + file_name, "w") as f:
-                    json.dump(data, f)
-                # Continue to main program
-                self.accept()
-            else:
-                QMessageBox.warning(self, "License Verification Failed", "A valid license key must be entered to continue.")
+    def _on_next_pressed(self, button) -> None:
+        if self.verify_license(self.licenseBox.text()):
+            # License accepted; save to file
+            if not os.path.exists(file_dir):
+                os.makedirs(file_dir)
+            data = {"license": self.licenseBox.text()}
+            # Add license to existing data (if there's a file already)
+            try:
+                with open(file_dir + file_name, "r") as f:
+                    old_data = json.load(f)
+                    if isinstance(old_data, dict):
+                        data = old_data
+                        data["license"] = self.licenseBox.text()
+            except:
+                print("Couldn't retrieve existing data")
+            # Save to file
+            with open(file_dir + file_name, "w") as f:
+                json.dump(data, f)
+            # Continue to main program
+            self.accept()
+        else:
+            QMessageBox.warning(self, "License Verification Failed", "The provided key could not be validated. Please try again.")
     
     # Used in main.py to skip this dialog on init
     def verify_saved_license(self) -> bool:
@@ -675,8 +695,7 @@ class StartupLicenseDialog(QDialog):
             return True
         return False
 
-    # Check license with KeyAuth
-    # Sets static variables
+    # Check license with KeyAuth, Sets static variables
     def verify_license(self, license) -> bool:
         # Initialize with GET request
         conn = http.client.HTTPSConnection("keyauth.win")
@@ -713,6 +732,10 @@ class StartupLicenseDialog(QDialog):
             print("failed to initialize")
         conn.close()
         return False
+    
+
+    def _on_cancel_pressed(self) -> None:
+        self.reject()
 
 # Popup that opens from "License" button in main program
 class LicenseCheckDialog(QDialog):
@@ -795,7 +818,6 @@ class LicenseCheckDialog(QDialog):
             return f'Expires {relative_time} ({date})'
         else:
             return "(Lifetime)"
-
 
 
 class OptionToggle(QCheckBox):

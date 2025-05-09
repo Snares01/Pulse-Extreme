@@ -38,8 +38,8 @@ if __name__ == '__main__':
         # Run
         window.show()
         sys.exit(app.exec())
-    except:
-        print("Program exiting due to exception")
+    except Exception as e:
+        print(f'Program exiting due to exception:\n{e}')
     finally:
         # Logout of keyauth
         if sessionid:

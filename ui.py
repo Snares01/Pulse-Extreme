@@ -21,6 +21,16 @@ REQ_OWNER_ID = "5yiNVzEtid"
 file_dir = os.path.expandvars(r'%LOCALAPPDATA%\PulseExtreme')
 file_name = r'\save_state.json'
 
+def get_save_data() -> dict:
+    if os.path.exists(file_dir + file_name):
+        with open(file_dir + file_name, "r") as f:
+            content = f.read()
+            if content: # File not empty
+                data = json.loads(content)
+                if isinstance(data, dict):
+                    return data
+    return {}
+
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow) -> None:
@@ -366,6 +376,7 @@ class Ui_MainWindow(object):
     # Signal
     def _on_license_clicked(self) -> None:
         dialog = LicenseCheckDialog()
+        #dialog.setParent(self)
         dialog.exec()
         
 # Popup that opens when applying tweaks
@@ -544,7 +555,6 @@ class ApplyDialog(QDialog):
         # Save to file
         with open(file_dir + r'\save_state.json', "w") as f:
             json.dump(save_data, f)
-        print(save_data)
         self.saved = True
         self.close()
 
@@ -690,6 +700,7 @@ class StartupLicenseDialog(QDialog):
     
     # Used in main.py to skip this dialog on init
     def verify_saved_license(self) -> bool:
+
         saved_license = StartupLicenseDialog.get_saved_license()
         if saved_license and self.verify_license(saved_license):
             return True
@@ -743,18 +754,30 @@ class LicenseCheckDialog(QDialog):
         super().__init__()
         self.setObjectName("LicenseCheckWindow")
         self.setWindowTitle("License")
+        self.setWindowIcon(QIcon(get_path("license_key")))
         
         # Create layout & widgets
         self.mainLayout = QVBoxLayout()
         self.mainLayout.setContentsMargins(10, 10, 10, 10)
 
+        self.topSpacer = QSpacerItem(20, 15, QSizePolicy.Minimum, QSizePolicy.Minimum)
+
         self.licenseLabel = QLabel() 
-        self.licenseLabel.setText("Current license:\n" + StartupLicenseDialog.license)
+        self.licenseLabel.setText("Your license:\n" + StartupLicenseDialog.license)
         self.licenseLabel.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        licenseLabelFont = QFont("Roboto-Medium", 12)
+        licenseLabelFont.setBold(True)
+        self.licenseLabel.setFont(licenseLabelFont)
         
         self.expireLabel = QLabel()
         self.expireLabel.setText(self.format_expiry_time())
         self.expireLabel.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+
+        self.bottomSpacer = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Minimum)
+
+        self.lineBreak = QFrame()
+        self.lineBreak.setFrameShape(QFrame.Shape.HLine)
+        self.lineBreak.setFrameShadow(QFrame.Shadow.Sunken)
 
         self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Open | QDialogButtonBox.Cancel)
         self.buttonBox.setCenterButtons(True)
@@ -772,8 +795,11 @@ class LicenseCheckDialog(QDialog):
         continueButton.clicked.connect(self._on_continue_pressed)
 
         # Add widgets to layout
+        self.mainLayout.addItem(self.topSpacer)
         self.mainLayout.addWidget(self.licenseLabel)
         self.mainLayout.addWidget(self.expireLabel)
+        self.mainLayout.addItem(self.bottomSpacer)
+        self.mainLayout.addWidget(self.lineBreak)
         self.mainLayout.addWidget(self.buttonBox)
         self.setLayout(self.mainLayout)
 
@@ -784,6 +810,7 @@ class LicenseCheckDialog(QDialog):
 
  
     def _on_logout_pressed(self) -> None:
+        print("logout")
         # Remove saved license
         if os.path.exists(file_dir + file_name):
             with open(file_dir + file_name, "r") as f:
@@ -805,7 +832,7 @@ class LicenseCheckDialog(QDialog):
 
 
     def _on_continue_pressed(self) -> None:
-        self.accept()
+        self.close()
 
 
     def format_expiry_time(self) -> str:
@@ -818,7 +845,7 @@ class LicenseCheckDialog(QDialog):
             return f'Expires {relative_time} ({date})'
         else:
             return "(Lifetime)"
-
+        
 
 class OptionToggle(QCheckBox):
     tweakToggled = Signal(bool, bool, str, str) # pressed, already applied, name, category

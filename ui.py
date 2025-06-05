@@ -10,8 +10,8 @@ from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QLineEdit,
     QSpacerItem, QStackedWidget, QVBoxLayout, QWidget, QLayout, QGridLayout, QCheckBox, QDialog, QDialogButtonBox, QFrame)
 from threading import Timer
 from asset_finder import get_path, get_batch_path
-import subprocess, json, os, sys, pyperclip, http.client
-import datetime, humanize
+import subprocess, json, os, sys, platform, http.client
+import datetime, humanize, pyperclip
 import constants
 
 REQ_NAME = "Pulse%20Extreme"
@@ -387,17 +387,36 @@ class ApplyDialog(QDialog):
         super().__init__()
         self.setObjectName("ApplyWindow")
         self.setWindowTitle("Applying Tweaks...")
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, False)
+        #self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setFixedWidth(300)
-        self.setStyleSheet("""
+        border_rad = 0
+        if platform.release() == "11":
+            border_rad = 6 # Adjust for rounded corners on windows 11
+        style_str = """
             * {
-                color: white;      
+                color: white;
             }
             QDialog {
                 background-color: #222;
-                border: 2px solid gray;  
+                border: 2px solid white; 
+                border-width: 0px 1px 1px 1px;
+                border-bottom-left-radius: %dpx;
+                border-bottom-right-radius: %dpx;
             }
-        """)
+            QProgressBar {
+                background-color: #222;
+                border: 2px solid gray;
+                min-height: 20px;
+                max-height: 20px;
+            }
+            QProgressBar::chunk {
+                background-color: #dc6acf;
+                width: 10px;
+                margin: 0px;     
+            }
+        """ % (border_rad, border_rad)
+        self.setStyleSheet(style_str)
 
         self.num_tweaks = 0
         self.applied_tweaks = []
@@ -422,6 +441,7 @@ class ApplyDialog(QDialog):
         self.progressBar = QProgressBar()
         self.progressBar.setRange(0, len(items))
         self.progressBar.setTextVisible(False)
+        self.progressBar.setMinimumHeight(20)
 
         self.barTopSpacer = QSpacerItem(10, 10, QSizePolicy.Minimum, QSizePolicy.Expanding)
         self.barBottomSpacer = QSpacerItem(10, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
@@ -477,7 +497,7 @@ class ApplyDialog(QDialog):
         errorLabels = []
         errorLayout = QVBoxLayout()
         for name in self.errorReport:
-            errorLabels.append(QLabel("* " + name))
+            errorLabels.append(QLabel("• " + name))
             numErrors += 1
         for label in errorLabels:
             errorLayout.addWidget(label)
@@ -576,12 +596,21 @@ class ApplyWorker(QObject):
             # Open file
             tweak = constants.TWEAKS[category][name]
             filepath = get_batch_path(tweak['batch'])
-            p = subprocess.Popen(filepath, shell=True, stdout = subprocess.PIPE)
+            print(filepath)
+            if filepath.endswith("reg"):
+                # Registry edit
+                print("applying .reg file")
+                p = subprocess.Popen(['regedit.exe', '/s', filepath], shell=True, stdout = subprocess.PIPE)
+            else:
+                print("applying .bat file")
+                # Batch file
+                p = subprocess.Popen(filepath, shell=True, stdout = subprocess.PIPE)
             # Return result
             stdout, stderr = p.communicate()
             if p.returncode == 0:
                 self.tweakDone.emit(True, name)
             else:
+                print(p.returncode)
                 self.tweakDone.emit(False, name)
 
         self.finished.emit()
@@ -631,8 +660,6 @@ class StartupLicenseDialog(QDialog):
         self.lineBreak.setFrameShadow(QFrame.Shadow.Sunken)
 
         self.buttonBox = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Apply)
-        #QTimer.singleShot(0, self._set_default_btn)
-        #self.buttonBox.setCenterButtons(True)
 
         nextButton = self.buttonBox.button(QDialogButtonBox.Apply)
         nextButton.clicked.connect(self._on_next_pressed)
@@ -640,6 +667,12 @@ class StartupLicenseDialog(QDialog):
 
         cancelButton = self.buttonBox.button(QDialogButtonBox.Cancel)
         cancelButton.clicked.connect(self._on_cancel_pressed)
+
+        # Make next button default
+        cancelButton.setDefault(False)
+        cancelButton.setAutoDefault(False)
+        nextButton.setDefault(True)
+        nextButton.setAutoDefault(True)
         
         # Add widgets to layout
         self.mainLayout.addWidget(self.topMessage)
@@ -666,13 +699,6 @@ class StartupLicenseDialog(QDialog):
                     if isinstance(data, dict) and "license" in data:
                         return data["license"]
         return ""
-
-    # Must be done after dialog / layout is shown
-    def _set_default_btn(self):
-        applyBtn = self.buttonBox.button(QDialogButtonBox.Apply)
-        applyBtn.setDefault(True)
-        applyBtn.setAutoDefault(True)
-        applyBtn.setFocus()
     
 
     def _on_next_pressed(self, button) -> None:
@@ -810,7 +836,6 @@ class LicenseCheckDialog(QDialog):
 
  
     def _on_logout_pressed(self) -> None:
-        print("logout")
         # Remove saved license
         if os.path.exists(file_dir + file_name):
             with open(file_dir + file_name, "r") as f:
@@ -822,8 +847,10 @@ class LicenseCheckDialog(QDialog):
                         del data["license"]
                         with open(file_dir + r'\save_state.json', "w") as f:
                             json.dump(data, f)
-                        # Reset program
-                        os.execl(sys.executable, f'"{sys.executable}"', *sys.argv)
+                        # Close program
+                        # TODO: Make program reset to license key window
+                        #os.execl(sys.executable, f'"{sys.executable}"', *sys.argv)
+                        sys.exit()
         self.accept()
     
 

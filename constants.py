@@ -20,7 +20,7 @@ TWEAKS = {
             "desc": "Forces active cooling (using fans rather than throttling the CPU) for both plugged-in and battery power modes"
         },
         "CSRSS": {
-            "batch": "batch/2CPU/CSRSS.bat",
+            "batch": "batch/2CPU/CSRSS.reg",
             "desc": "Assigns higher CPU and disk priority to csrss.exe, a core Windows system process"
         },
         "Disable Core Parking": {
@@ -185,10 +185,10 @@ TWEAKS = {
             "batch": "batch/7General/Game Optimizations.reg"
         },
         "Stop Setting Sync": {
-            "batch": "batch/7General/Stop Setting Sync.reg"
+            "batch": "batch/7General/Stop Setting Sync.bat"
         },
-        "Stop Sharing User Experience": {
-            "batch": "batch/7General/Stop Sharing User Experience.bat"
+        "Stop Sharing User Experiences": {
+            "batch": "batch/7General/Stop Sharing User Experiences.bat"
         },
     },
     "Debloat": {

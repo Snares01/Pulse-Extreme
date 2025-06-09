@@ -31,6 +31,13 @@ def get_save_data() -> dict:
                     return data
     return {}
 
+def dump_save_data(data) -> None:
+    if not os.path.exists(file_dir):
+        os.make_dirs(file_dir)
+    
+    with open(file_dir + file_name, "w") as f:
+        json.dump(data, f)
+
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow) -> None:
@@ -286,15 +293,8 @@ class Ui_MainWindow(object):
     
 
     def _load_tweaks(self) -> None:
-        file_path = os.path.expandvars(r'%LOCALAPPDATA%\PulseExtreme\save_state.json')
-        if not os.path.exists(file_path):
-            return
-        # Get data from file
-        data = {}
-        try:
-            with open(file_path, "r") as f:
-                data = json.load(f)
-        except:
+        data = get_save_data()
+        if not data:
             return
         # Update toggles
         if ("applied" in data) and (isinstance(data["applied"], list) and (len(data["applied"]) > 0)):
@@ -387,6 +387,7 @@ class ApplyDialog(QDialog):
         super().__init__()
         self.setObjectName("ApplyWindow")
         self.setWindowTitle("Applying Tweaks...")
+        self.setWindowIcon(QIcon(get_path("icon_logo")))
         self.setAttribute(Qt.WA_TranslucentBackground, False)
         #self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setFixedWidth(300)
@@ -405,7 +406,7 @@ class ApplyDialog(QDialog):
                 border-bottom-right-radius: %dpx;
             }
             QProgressBar {
-                background-color: #222;
+                background-color: #fff;
                 border: 2px solid gray;
                 min-height: 20px;
                 max-height: 20px;
@@ -559,22 +560,18 @@ class ApplyDialog(QDialog):
             os.makedirs(file_dir)
         # Create save data
         save_data = {"applied": self.applied_tweaks}
-        # Get existing data (if it exists)
-        try:
-            with open(file_dir + file_name, "r") as f:
-                old_data = json.load(f)
-                if ("applied" in old_data) and (isinstance(old_data["applied"], list)) and (len(old_data["applied"]) > 0):
-                    print("saving applied tweaks...")
-                    for tweak_name in old_data["applied"]:
-                        if tweak_name not in save_data["applied"]:
-                            save_data["applied"].append(tweak_name)
-                if "license" in old_data:
-                    save_data["license"] = old_data["license"]
-        except: # We don't care about the type of exception, just save anyway. there's probably a better way to do this ¯\_(ツ)_/¯
-            print("Couldn't retrieve existing data")
+
+        # Add existing data to new save data
+        old_data = get_save_data()
+        if ("applied" in old_data) and (isinstance(old_data["applied"], list)) and (len(old_data["applied"]) > 0):
+            for tweak_name in old_data["applied"]:
+                if tweak_name not in save_data["applied"]:
+                    save_data["applied"].append(tweak_name)
+        if "license" in old_data:
+            save_data["license"] = old_data["license"]
+
         # Save to file
-        with open(file_dir + r'\save_state.json', "w") as f:
-            json.dump(save_data, f)
+        dump_save_data(save_data)
         self.saved = True
         self.close()
 
@@ -688,37 +685,15 @@ class StartupLicenseDialog(QDialog):
         self.adjustSize()
         size_hint = self.sizeHint()
         self.setFixedSize(350, size_hint.height())
-
-    @staticmethod
-    def get_saved_license() -> str:
-        if os.path.exists(file_dir + file_name):
-            with open(file_dir + file_name, "r") as f:
-                content = f.read()
-                if content: # File not empty
-                    data = json.loads(content)
-                    if isinstance(data, dict) and "license" in data:
-                        return data["license"]
-        return ""
     
 
     def _on_next_pressed(self, button) -> None:
         if self.verify_license(self.licenseBox.text()):
-            # License accepted; save to file
-            if not os.path.exists(file_dir):
-                os.makedirs(file_dir)
-            data = {"license": self.licenseBox.text()}
             # Add license to existing data (if there's a file already)
-            try:
-                with open(file_dir + file_name, "r") as f:
-                    old_data = json.load(f)
-                    if isinstance(old_data, dict):
-                        data = old_data
-                        data["license"] = self.licenseBox.text()
-            except:
-                print("Couldn't retrieve existing data")
+            data = get_save_data()
+            data["license"] = self.licenseBox.text()
             # Save to file
-            with open(file_dir + file_name, "w") as f:
-                json.dump(data, f)
+            dump_save_data(data)
             # Continue to main program
             self.accept()
         else:
@@ -726,8 +701,12 @@ class StartupLicenseDialog(QDialog):
     
     # Used in main.py to skip this dialog on init
     def verify_saved_license(self) -> bool:
-
-        saved_license = StartupLicenseDialog.get_saved_license()
+        save_data = get_save_data()
+        if "license" in save_data:
+            saved_license = save_data["license"]
+        else:
+            saved_license = ""
+        
         if saved_license and self.verify_license(saved_license):
             return True
         return False
@@ -837,21 +816,13 @@ class LicenseCheckDialog(QDialog):
  
     def _on_logout_pressed(self) -> None:
         # Remove saved license
-        if os.path.exists(file_dir + file_name):
-            with open(file_dir + file_name, "r") as f:
-                content = f.read()
-                if content: # File not empty
-                    data = json.loads(content)
-                    if isinstance(data, dict) and "license" in data:
-                        # Remove license, write new data to file
-                        del data["license"]
-                        with open(file_dir + r'\save_state.json', "w") as f:
-                            json.dump(data, f)
-                        # Close program
-                        # TODO: Make program reset to license key window
-                        #os.execl(sys.executable, f'"{sys.executable}"', *sys.argv)
-                        sys.exit()
-        self.accept()
+        save_data = get_save_data()
+        if "license" in save_data:
+            del save_data["license"]
+            dump_save_data(save_data)
+        # Close program
+        # TODO: Make program reset to license key window
+        sys.exit()
     
 
     def _on_copy_pressed(self) -> None:
